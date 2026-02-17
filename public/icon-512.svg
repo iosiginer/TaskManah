@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#8B7355"/>
+  <g transform="translate(256,240)">
+    <circle cx="0" cy="0" r="130" fill="none" stroke="#FBF7F2" stroke-width="14"/>
+    <polyline points="-45,5 -15,40 55,-35" fill="none" stroke="#FBF7F2" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="256" y="440" text-anchor="middle" font-family="Georgia, serif" font-size="56" font-weight="700" fill="#FBF7F2">TaskFlow</text>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="32" fill="#8B7355"/>
+  <g transform="translate(96,96)">
+    <circle cx="0" cy="0" r="52" fill="none" stroke="#FBF7F2" stroke-width="6"/>
+    <polyline points="-18,2 -6,16 22,-14" fill="none" stroke="#FBF7F2" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="96" y="168" text-anchor="middle" font-family="Georgia, serif" font-size="22" font-weight="700" fill="#FBF7F2">TF</text>
+</svg>
