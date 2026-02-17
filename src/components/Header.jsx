@@ -8,6 +8,8 @@ export default function Header({
   onSortChange,
   darkMode,
   onToggleDarkMode,
+  user,
+  onSignOut,
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef(null);
@@ -55,6 +57,16 @@ export default function Header({
           >
             {darkMode ? '☀' : '🌙'}
           </button>
+          {user && (
+            <button
+              className="btn-icon header-btn"
+              onClick={onSignOut}
+              aria-label="Sign out"
+              title={user.email}
+            >
+              ⏻
+            </button>
+          )}
         </div>
       </div>
       {searchOpen && (

@@ -1,15 +1,19 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import TaskCard from './components/TaskCard';
 import TaskForm from './components/TaskForm';
 import ConfirmDialog from './components/ConfirmDialog';
 import Toast from './components/Toast';
+import Auth from './components/Auth';
 import { CATEGORIES } from './utils/constants';
 import { generateId, getNextOccurrence, sortTasks } from './utils/helpers';
 import * as storage from './utils/storage';
+import { useAuth } from './hooks/useAuth';
+import * as sync from './utils/sync';
 import './App.css';
 
 function App() {
+  const { user, loading: authLoading, signIn, signUp, signOut, isConfigured } = useAuth();
   const [tasks, setTasks] = useState(() => storage.get('tasks', []));
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -20,8 +24,43 @@ function App() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [toast, setToast] = useState(null);
   const [addButtonDisabled, setAddButtonDisabled] = useState(false);
+  const hasMigrated = useRef(false);
 
-  // Persist tasks
+  // Fetch tasks from Supabase when user signs in
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    const init = async () => {
+      // Migrate local tasks to Supabase on first sign-in
+      if (!hasMigrated.current) {
+        await sync.migrateLocalTasks(user.id);
+        hasMigrated.current = true;
+      }
+
+      const remoteTasks = await sync.fetchTasks(user.id);
+      if (!cancelled) {
+        setTasks(remoteTasks);
+      }
+    };
+
+    init();
+
+    // Subscribe to real-time updates
+    const unsubscribe = sync.subscribeToTasks(user.id, (updatedTasks) => {
+      if (!cancelled) {
+        setTasks(updatedTasks);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [user]);
+
+  // Persist tasks to localStorage (always, for offline access)
   useEffect(() => {
     storage.set('tasks', tasks);
   }, [tasks]);
@@ -55,16 +94,22 @@ function App() {
     setTasks((prev) => [newTask, ...prev]);
     setShowForm(false);
     showToast('Task added');
-  }, [showToast]);
+    sync.addTask(newTask, user?.id);
+  }, [showToast, user]);
 
   const handleEditTask = useCallback((taskData) => {
     setTasks((prev) =>
-      prev.map((t) => (t.id === taskData.id ? { ...t, ...taskData } : t))
+      prev.map((t) => {
+        if (t.id !== taskData.id) return t;
+        const updated = { ...t, ...taskData };
+        sync.updateTask(updated, user?.id);
+        return updated;
+      })
     );
     setEditingTask(null);
     setShowForm(false);
     showToast('Task updated');
-  }, [showToast]);
+  }, [showToast, user]);
 
   const handleToggleTask = useCallback((taskId) => {
     setTasks((prev) => {
@@ -85,15 +130,18 @@ function App() {
             };
           }
         }
-        return { ...t, completed, completedAt: completed ? new Date().toISOString() : null };
+        const toggled = { ...t, completed, completedAt: completed ? new Date().toISOString() : null };
+        sync.updateTask(toggled, user?.id);
+        return toggled;
       });
       if (recurringTask) {
+        sync.addTask(recurringTask, user?.id);
         return [recurringTask, ...updated];
       }
       return updated;
     });
     showToast('Task completed');
-  }, [showToast]);
+  }, [showToast, user]);
 
   const handleDeleteTask = useCallback((taskId) => {
     setConfirmDelete(taskId);
@@ -103,13 +151,15 @@ function App() {
     const taskToDelete = tasks.find((t) => t.id === confirmDelete);
     if (taskToDelete) {
       setTasks((prev) => prev.filter((t) => t.id !== confirmDelete));
+      sync.deleteTask(confirmDelete, user?.id);
       showToast('Task deleted', () => {
         setTasks((prev) => [taskToDelete, ...prev]);
+        sync.addTask(taskToDelete, user?.id);
         showToast('Task restored');
       });
     }
     setConfirmDelete(null);
-  }, [confirmDelete, tasks, showToast]);
+  }, [confirmDelete, tasks, showToast, user]);
 
   const handleOpenForm = useCallback(() => {
     if (addButtonDisabled) return;
@@ -128,6 +178,11 @@ function App() {
     setShowForm(false);
     setEditingTask(null);
   }, []);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    showToast('Signed out');
+  }, [signOut, showToast]);
 
   // Filter and sort tasks
   const activeTasks = tasks.filter((t) => !t.completed);
@@ -152,6 +207,24 @@ function App() {
   const filteredActive = filterTasks(activeTasks);
   const filteredCompleted = filterTasks(completedTasks);
 
+  // Show loading spinner while checking auth
+  if (authLoading) {
+    return (
+      <div className="app loading-screen">
+        <p className="loading-text">Loading...</p>
+      </div>
+    );
+  }
+
+  // Show auth screen if Supabase is configured but user isn't signed in
+  if (isConfigured && !user) {
+    return (
+      <div className="app" data-testid="auth-screen">
+        <Auth onSignIn={signIn} onSignUp={signUp} />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <Header
@@ -161,6 +234,8 @@ function App() {
         onSortChange={setSortBy}
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode((d) => !d)}
+        user={user}
+        onSignOut={handleSignOut}
       />
 
       <main className="main-content">
